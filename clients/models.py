@@ -3,6 +3,7 @@
 from django.db import models
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError 
+from django.db.models import Q # Import needed for Q objects in clean method
 
 # ----------------------------------------------------
 # 🏆 GLOBAL CONSTANTS FOR BUSINESS LOGIC
@@ -58,7 +59,7 @@ class Client(models.Model):
         help_text="Any important notes, preferences, or history about the client."
     )
     
-    email = models.EmailField(max_length=255, unique=True, blank=True, null=True)
+    email = models.EmailField(max_length=255, unique=False, blank=True, null=True) # Unique handled in clean()
     
     # NOTE: The phone_regex validation defined in the original code is complex.
     # It will remain as-is, but a simpler validator might be better in a real international app.
@@ -108,7 +109,7 @@ class Client(models.Model):
     )
 
     custom_labor_rate = models.DecimalField(
-        max_digits=8, # Increased to allow larger rates, e.g., 99999.99
+        max_digits=8, 
         decimal_places=2, 
         null=True, 
         blank=True,
@@ -123,7 +124,7 @@ class Client(models.Model):
     )
 
     custom_markup_percentage = models.DecimalField(
-        max_digits=5, # Allows percentages up to 999.99%
+        max_digits=5, 
         decimal_places=2, 
         null=True, 
         blank=True,
@@ -152,7 +153,6 @@ class Client(models.Model):
         Custom validation to ensure required fields based on client_type are present 
         AND cleans up unused name/override fields before saving.
         """
-        from django.db.models import Q # Import needed for Q objects
         
         # A. Handle cleanup and validation based on client_type
         if self.client_type == 'Individual':
@@ -173,8 +173,14 @@ class Client(models.Model):
                 raise ValidationError(
                     {'company_name': "Company clients must have a Company Name."}
                 )
+        
+        # B. Validate required email field
+        if not self.email or self.email.strip() == '':
+             raise ValidationError(
+                 {'email': "Email address is a required field."}
+             )
 
-        # B. Clean up override values if the corresponding boolean is False
+        # C. Clean up override values if the corresponding boolean is False
         if not self.labor_rate_override:
             self.custom_labor_rate = None
         
@@ -184,16 +190,10 @@ class Client(models.Model):
         if not self.payment_terms_override:
             self.custom_payment_terms = None
 
-        # C. Ensure that either first/last name or company name is NOT null. (Redundant but safe)
-        if not self.first_name and not self.last_name and not self.company_name:
-            raise ValidationError(
-                "Client record must contain a valid name (First/Last or Company Name)."
-            )
-        
         # D. Validate unique email only if it is provided (standard Django model cleaning)
         if self.email:
             # Check for existing email case-insensitively, excluding the current client (for edits)
-            if Client.objects.filter(Q(email__iexact=self.email) & ~Q(pk=self.pk)).exists():
+            if Client.objects.filter(Q(email__iexact=self.email.strip()) & ~Q(pk=self.pk)).exists():
                  raise ValidationError(
                         {'email': "A client with this email address already exists."}
                     )

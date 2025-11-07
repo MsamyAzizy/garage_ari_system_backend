@@ -40,6 +40,7 @@ class ClientDetailSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(max_length=255, allow_blank=True, allow_null=True, required=False)
     
     # --- CONTACT & METADATA ---
+    # Phone number uses validators defined in the model
     phone_number = serializers.CharField(
         max_length=20, 
         allow_blank=True,
@@ -55,7 +56,7 @@ class ClientDetailSerializer(serializers.ModelSerializer):
         required=False
     )
     
-    # Email is REQUIRED by the front-end
+    # Email is REQUIRED by the front-end and should be required here
     email = serializers.EmailField(
         max_length=255, 
         required=True,      
@@ -110,13 +111,14 @@ class ClientDetailSerializer(serializers.ModelSerializer):
         Custom validation to enforce conditional required fields 
         based on the client_type, and checks override fields.
         """
+        # Determine client type based on incoming data or existing instance
         instance_type = self.instance.client_type if self.instance else 'Individual'
         client_type = data.get('client_type', instance_type)
         
         # Helper to get field value, falling back to instance if not in data, then to empty string
         def get_field_value(field_name):
             value = data.get(field_name)
-            if value is None and self.instance:
+            if value is None and self.instance and hasattr(self.instance, field_name):
                 value = getattr(self.instance, field_name)
             return value if value is not None else ''
 
@@ -133,6 +135,7 @@ class ClientDetailSerializer(serializers.ModelSerializer):
             
             data['company_name'] = None 
             
+            # Only update data if the field was passed in the request or if it was cleared
             if 'first_name' in data: data['first_name'] = first_name
             if 'last_name' in data: data['last_name'] = last_name
 
@@ -148,48 +151,57 @@ class ClientDetailSerializer(serializers.ModelSerializer):
             
             if 'company_name' in data: data['company_name'] = company_name
 
-        # --- 2. Validation for Override Values ---
+        # --- 2. Validation for Override Values (Decimal/String presence) ---
         
         # Check if labor override is ON but value is missing
-        if data.get('labor_rate_override') and not data.get('custom_labor_rate'):
+        if data.get('labor_rate_override') and data.get('custom_labor_rate') is None:
              raise serializers.ValidationError({
                  'custom_labor_rate': _("A custom labor rate must be provided if the labor rate override is checked."),
              })
              
         # Check if parts markup override is ON but value is missing
-        if data.get('parts_markup_override') and not data.get('custom_markup_percentage'):
+        if data.get('parts_markup_override') and data.get('custom_markup_percentage') is None:
              raise serializers.ValidationError({
                  'custom_markup_percentage': _("A custom markup percentage must be provided if the parts markup override is checked."),
              })
              
-        # Check if payment terms override is ON but value is missing
-        if data.get('payment_terms_override') and not get_field_value('custom_payment_terms').strip():
+        # Check if payment terms override is ON but value is missing/empty
+        custom_terms = get_field_value('custom_payment_terms').strip()
+        if data.get('payment_terms_override') and not custom_terms:
              raise serializers.ValidationError({
                  'custom_payment_terms': _("Custom payment terms must be provided if the payment terms override is checked."),
              })
-
-
-        # --- 3. Final Model Validation ---
         
-        # The model's clean method handles final name, email uniqueness, and cleanup of unused override values.
+        # Clean the custom terms if provided
+        if 'custom_payment_terms' in data:
+            data['custom_payment_terms'] = custom_terms if custom_terms else None
+
+
+        # --- 3. Final Model Validation (uses the model's clean() method) ---
+        
         try:
-            # Create a temporary instance to call the model's clean() method
-            # This ensures complex validation (like email uniqueness) and data cleanup runs.
+            # Prepare data to call the model's clean() method
             instance_data = {}
             if self.instance:
                 instance_data.update(self.instance.__dict__) 
             
-            instance_data.update(data)
+            # Apply incoming data, ensuring only model fields are passed to the model
+            temp_data = {}
+            for k, v in data.items():
+                if k in self.Meta.fields or k in Client._meta.get_fields():
+                    temp_data[k] = v
+
+            instance_data.update(temp_data)
             
             model_fields = [f.name for f in Client._meta.get_fields()]
             model_data = {k: v for k, v in instance_data.items() if k in model_fields or k == 'pk'} 
             
             temp_instance = Client(**model_data)
+            
+            # Runs model-level validation (like email uniqueness, required email check, and override cleanup)
             temp_instance.clean() 
             
-            # 💡 IMPORTANT: If the model's clean() method clears any override fields (e.g., setting custom_labor_rate=None 
-            # when labor_rate_override=False), we must update the data dictionary here 
-            # to match the cleaned model instance.
+            # Update data dictionary with cleaned values from the model's clean() method
             data['custom_labor_rate'] = temp_instance.custom_labor_rate
             data['custom_markup_percentage'] = temp_instance.custom_markup_percentage
             data['custom_payment_terms'] = temp_instance.custom_payment_terms
