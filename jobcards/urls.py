@@ -2,7 +2,7 @@
 
 from rest_framework_nested import routers
 from django.urls import path, include
-from .views import JobCardViewSet, PaymentViewSet
+from .views import JobCardViewSet, PaymentViewSet, JobCardKanbanView # <-- IMPORTED
 
 # We need a dependency: pip install djangorestframework-nested
 
@@ -23,13 +23,17 @@ job_cards_router.register(r'payments', PaymentViewSet, basename='jobcard-payment
 
 
 urlpatterns = [
+    # 🔑 NEW KANBAN ROUTE
+    path('kanban/', JobCardKanbanView.as_view(), name='jobcard-kanban'), 
+    
     # Main JobCard and Payments URLs
     path('', include(router.urls)), 
     path('', include(job_cards_router.urls)),
 ]
 
 # Generated URLs:
+# /api/jobcards/kanban/      <-- NEW URL FOR KANBAN DATA (GET)
 # /api/jobcards/             (JobCard List/Create)
 # /api/jobcards/{pk}/        (JobCard Detail/Update/Delete)
-# /api/jobcards/{pk}/update-status/ (Custom Action)
+# /api/jobcards/{pk}/update-status/ (Custom Action - used by Kanban POST/PATCH)
 # /api/jobcards/{job_card_pk}/payments/ (Payment Create)
