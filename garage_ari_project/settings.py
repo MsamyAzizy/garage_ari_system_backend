@@ -1,5 +1,3 @@
-# garage_ari_project/settings.py
-
 from pathlib import Path
 from datetime import timedelta
 
@@ -34,7 +32,8 @@ INSTALLED_APPS = [
     'corsheaders',                      
     'rest_framework',                   
     'rest_framework_simplejwt',         
-    'rest_framework_nested',            
+    'rest_framework_nested', 
+    'djoser',           
 
     # Custom ARI Apps
     'auth_app',                         
@@ -127,6 +126,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
 
+# ⭐ NEW: MEDIA CONFIGURATION (For User Uploaded Files) ⭐
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+# ⭐ END MEDIA CONFIGURATION ⭐
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -143,7 +147,6 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication', 
     ),
-    # 🏆 CRITICAL FIX: Use PageNumberPagination and set page size to 10
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10, # <-- ENSURE THIS IS 10
 }
@@ -164,13 +167,38 @@ SIMPLE_JWT = {
 }
 
 
+# 🛑 DJOSER CONFIGURATION
+DJOSER = {
+    'USER_ID_FIELD': 'id', 
+    'USERNAME_FIELD': 'email', # 🥇 CRITICAL FIX: Use email for auth
+    
+    'USER_SERIALIZERS': {
+        'current_user': 'auth_app.serializers.CustomUserSerializer',
+    },
+    
+    'PASSWORD_RESET_CONFIRM_URL': '#/password/reset/confirm/{uid}/{token}',
+    'USERNAME_RESET_CONFIRM_URL': '#/username/reset/confirm/{uid}/{token}',
+    'ACTIVATION_URL': '#/activate/{uid}/{token}',
+    'TOKEN_MODEL': None, 
+    
+    'SOCIAL_AUTH_ALLOWED_REDIRECTS': [],
+    'PERMISSIONS': {
+        'current_user': ['rest_framework.permissions.IsAuthenticated'],
+    }
+}
+
+
 # ==============================================================================
 # 5. CORS HEADERS CONFIGURATION (Crucial for React Frontend)
 # ==============================================================================
 
 CORS_ALLOWED_ORIGINS = [
+    # 🏆 FIX: Added standard React/Vite port (3000)
     'http://localhost:3000', 
     'http://127.0.0.1:3000',
+    # Keeping original ports for flexibility
+    'http://localhost:2025', 
+    'http://127.0.0.1:2025',
 ]
 
 CORS_ALLOW_CREDENTIALS = True
