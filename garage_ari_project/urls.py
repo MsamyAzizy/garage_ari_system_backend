@@ -24,6 +24,10 @@ urlpatterns = [
     path('api/clients/', include('clients.urls')), 
     path('api/jobcards/', include('jobcards.urls')),
     path('api/inventory/', include('inventory.urls')),
+    
+    # ✅ CRITICAL FIX: Add this line to include routes from the employees app
+    # Full Path: /api/employees/ (which handles the frontend request)
+    path('api/employees/', include('employees.urls')),
 ]
 
 # ⭐ CRITICAL: Add this block to serve media files in development (when DEBUG=True)

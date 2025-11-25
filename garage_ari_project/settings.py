@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     'clients',                          
     'inventory',                        
     'jobcards',                         
+    # ✅ CRITICAL FIX: Add the employees app to the list
+    'employees', 
 ]
 
 

@@ -1,6 +1,5 @@
 # auth_app/models.py
 
-# 🏆 NEW IMPORT: Import BaseUserManager
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
@@ -38,39 +37,152 @@ class CustomUserManager(BaseUserManager):
 
 
 # ====================================================================
-# 2. Custom User Model
+# 2. Custom User Model - FULLY UPDATED for HR/Employee Management
 # ====================================================================
+
+# 🏆 NEW CHOICES FOR ROLES (Crucial for system permissions)
+ROLE_CHOICES = (
+    ('owner', 'Owner / Administrator'),
+    ('manager', 'Shop Manager'),
+    ('service_advisor', 'Service Advisor'),
+    ('mechanic', 'Technician / Mechanic'),
+    ('customer', 'Customer Account (Non-Employee)'), # Default
+)
+
+# Using an explicit status list for clarity
+EMPLOYMENT_STATUS_CHOICES = (
+    ('active', 'Active'),
+    ('on_leave', 'On Leave'),
+    ('suspended', 'Suspended'),
+    ('terminated', 'Terminated'),
+)
+
+
 class User(AbstractUser):
     """
     Custom User model extending Django's built-in AbstractUser.
-    We set 'email' as the unique field for authentication.
+    Includes all necessary fields for Authentication, Employee Profile, and HR.
     """
     
-    # 🏆 FIX 1: Explicitly disable the username field inherited from AbstractUser
+    # -----------------------------------------------------------
+    # CORE AUTHENTICATION FIELDS
+    # -----------------------------------------------------------
     username = None 
-    
-    # 2. Define email as the unique required field
     email = models.EmailField(unique=True, blank=False, null=False)
-    
-    # ⭐ NEW FIELD: User Profile Avatar Image ⭐
     avatar = models.ImageField(
-        upload_to='avatars/', # Stores files in media/avatars/
+        upload_to='avatars/', 
         null=True, 
         blank=True,
         verbose_name='Profile Picture'
     )
-    # ⭐ END NEW FIELD ⭐
     
-    # 🏆 CRITICAL FIX: Tell Django to use the CustomUserManager
-    objects = CustomUserManager() 
+    # -----------------------------------------------------------
+    # BASIC & EMPLOYEE STATUS FIELDS
+    # -----------------------------------------------------------
+    employee_id = models.CharField(
+        max_length=15, 
+        unique=True, 
+        null=True, 
+        blank=True,
+        verbose_name='System Employee ID'
+    )
+    is_employee = models.BooleanField(
+        default=False,
+        help_text='Designates whether the user is considered shop personnel.',
+    )
+    role = models.CharField(
+        max_length=30,
+        choices=ROLE_CHOICES,
+        default='customer', 
+        verbose_name='User Role'
+    )
+    middle_name = models.CharField(max_length=50, blank=True, null=True)
+    gender = models.CharField(max_length=10, blank=True, null=True)
+    date_of_birth = models.DateField(blank=True, null=True)
+    nationality = models.CharField(max_length=50, blank=True, null=True)
+    marital_status = models.CharField(max_length=20, blank=True, null=True)
+    national_id = models.CharField(
+        max_length=50, 
+        unique=True, 
+        blank=True, 
+        null=True,
+        verbose_name='National ID/Passport'
+    )
+    tin_number = models.CharField(max_length=50, blank=True, null=True, verbose_name='TIN')
+    
+    # -----------------------------------------------------------
+    # CONTACT & EMERGENCY FIELDS
+    # -----------------------------------------------------------
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    residential_address = models.TextField(blank=True, null=True)
+    postal_address = models.TextField(blank=True, null=True)
+    
+    emergency_contact_name = models.CharField(max_length=100, blank=True, null=True)
+    emergency_contact_phone = models.CharField(max_length=20, blank=True, null=True)
+    emergency_relationship = models.CharField(max_length=50, blank=True, null=True)
 
-    # 🏆 FIX 3: Tell Django to use the email field for logging in
+    # -----------------------------------------------------------
+    # JOB & CONTRACT DETAILS
+    # -----------------------------------------------------------
+    job_title = models.CharField(max_length=100, blank=True, null=True)
+    department = models.CharField(max_length=50, blank=True, null=True)
+    division = models.CharField(max_length=50, blank=True, null=True)
+    grade = models.CharField(max_length=50, blank=True, null=True)
+    employment_type = models.CharField(max_length=20, blank=True, null=True)
+    employment_status = models.CharField(
+        max_length=20, 
+        choices=EMPLOYMENT_STATUS_CHOICES,
+        default='active',
+        blank=True, 
+        null=True
+    )
+    date_of_hire = models.DateField(blank=True, null=True)
+    contract_start_date = models.DateField(blank=True, null=True)
+    contract_end_date = models.DateField(blank=True, null=True)
+    work_location = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Linking to another User (the Supervisor)
+    supervisor = models.ForeignKey(
+        'self', # Links to the User model itself
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='supervisees'
+    )
+
+    # -----------------------------------------------------------
+    # SALARY & FINANCE FIELDS
+    # -----------------------------------------------------------
+    basic_salary = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    allowances = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    deductions = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    currency = models.CharField(max_length=5, default='USD')
+    
+    bank_name = models.CharField(max_length=100, blank=True, null=True)
+    bank_account_number = models.CharField(max_length=50, blank=True, null=True)
+    payment_method = models.CharField(max_length=50, blank=True, null=True)
+    
+    nssf_number = models.CharField(max_length=50, blank=True, null=True)
+    nhif_number = models.CharField(max_length=50, blank=True, null=True)
+
+    # -----------------------------------------------------------
+    # EDUCATION & SKILLS
+    # -----------------------------------------------------------
+    highest_education = models.CharField(max_length=50, blank=True, null=True)
+    institution_name = models.CharField(max_length=150, blank=True, null=True)
+    field_of_study = models.CharField(max_length=100, blank=True, null=True)
+    graduation_year = models.IntegerField(null=True, blank=True)
+    professional_certifications = models.TextField(blank=True, null=True)
+    skills = models.TextField(blank=True, null=True)
+    languages = models.CharField(max_length=255, blank=True, null=True)
+
+    # -----------------------------------------------------------
+    # DJANGO CONFIGURATION
+    # -----------------------------------------------------------
+    objects = CustomUserManager() 
     USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['first_name', 'last_name', 'is_employee', 'role'] 
     
-    # 4. REQUIRED_FIELDS lists fields required for createsuperuser command
-    REQUIRED_FIELDS = ['first_name', 'last_name'] 
-    
-    # Custom related names (necessary when replacing AbstractUser)
     groups = models.ManyToManyField(
         'auth.Group',
         related_name='ari_user_set',
@@ -87,4 +199,8 @@ class User(AbstractUser):
     )
     
     def __str__(self):
-        return self.email
+        return self.get_full_name() or self.email
+        
+    def get_full_name(self):
+        """Returns the first_name plus the last_name, with a space in between."""
+        return f'{self.first_name} {self.last_name}'.strip()

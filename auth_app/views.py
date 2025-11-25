@@ -1,52 +1,36 @@
 # auth_app/views.py
 
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-# 🚀 ADDED generics
-from rest_framework import serializers, status, generics 
+# 🚀 ADDED generics and Viewsets
+from rest_framework import serializers, status, generics, viewsets 
 from django.contrib.auth import get_user_model 
 
-# Assuming this file exists and contains the RegistrationSerializer AND the new UserSerializer
-# 🛑 NOTE: Ensure you import the new UserSerializer from .serializers
-from .serializers import RegistrationSerializer, UserSerializer 
+# 🛑 CRITICAL FIX: Update this import to reflect the names in serializers.py
+from .serializers import (
+    RegistrationSerializer, 
+    CustomUserSerializer, # Use the correct name for the base user serializer
+    EmployeeSerializer     # Import the new employee serializer
+)
 
-# -----------------
-# Serializer for Login
-# -----------------
+# ... (CustomTokenObtainPairSerializer and JWT Views remain the same) ...
 class CustomTokenObtainPairSerializer(serializers.Serializer):
-    """
-    Overrides the default SimpleJWT serializer to accept 'email' instead of 'username'
-    as the login identifier. (Remains as is)
-    """
     username_field = 'email'
     
     def validate(self, attrs):
         return super().validate(attrs)
 
-
-# -----------------
-# JWT Views
-# -----------------
-
 class CustomTokenObtainPairView(TokenObtainPairView):
-    """View for obtaining JWT token (handles the login request)."""
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = (AllowAny,) 
 
 class CustomTokenRefreshView(TokenRefreshView):
-    """View for refreshing the JWT token (maintains the session)."""
     permission_classes = (AllowAny,)
 
-# -----------------
-# User Registration View 
-# -----------------
-
+# ... (RegistrationView remains the same) ...
 class RegistrationView(APIView):
-    """
-    Endpoint for creating a new user account. (Remains as is)
-    """
     permission_classes = [AllowAny] 
     
     def post(self, request):
@@ -64,18 +48,49 @@ class RegistrationView(APIView):
 
 
 # -----------------
-# User Profile View 🚀 THE CORRECT DRF APPROACH 🚀
+# User Profile View 
 # -----------------
 
 class UserView(generics.RetrieveAPIView):
     """
-    Endpoint to retrieve details of the currently authenticated user using UserSerializer.
-    Accessed by the frontend via /api/auth/user/
+    Endpoint to retrieve details of the currently authenticated user.
     """
     permission_classes = [IsAuthenticated] 
-    serializer_class = UserSerializer
+    # 🛑 CRITICAL FIX: Use the correct serializer name
+    serializer_class = CustomUserSerializer 
 
     def get_object(self):
-        # DRF automatically finds the user from the JWT token in the request headers
-        # and makes it available as request.user.
         return self.request.user
+
+
+# =================================================================
+# 🏆 NEW: EMPLOYEE MANAGEMENT VIEWSET
+# =================================================================
+
+class EmployeeViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint that allows employees (shop personnel) to be viewed, 
+    created, updated, and deleted by authorized users (e.g., IsAdminUser).
+    """
+    # 1. Queryset: Filter to only show records where is_employee is True
+    queryset = get_user_model().objects.filter(is_employee=True).order_by('last_name')
+    
+    # 2. Serializer: Use the new comprehensive serializer
+    serializer_class = EmployeeSerializer
+    
+    # 3. Permissions: Only allow logged-in staff/admins to manage employees
+    # You might create a custom permission later, but IsAdminUser or IsAuthenticated is a good start.
+    permission_classes = [IsAuthenticated] 
+    
+    # Optional: We could add filtering or searching here, e.g., to search by name/employee_id
+    # filter_backends = [filters.SearchFilter]
+    # search_fields = ['first_name', 'last_name', 'employee_id']
+
+    def perform_create(self, serializer):
+        # When creating a new employee via this endpoint, ensure the is_employee flag is set
+        # This is also handled in the serializer's create method, but good to ensure here.
+        serializer.save(is_employee=True)
+        
+    def get_queryset(self):
+        # Ensure that only the current employees are returned by default.
+        return super().get_queryset()
