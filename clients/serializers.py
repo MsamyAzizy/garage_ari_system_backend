@@ -30,19 +30,73 @@ class CustomUserSerializer(UserSerializer):
 
 
 # ----------------------------------
-# 1. Vehicle Serializer
+# 1. Vehicle Serializer (FIXED - VIN Uniqueness REMOVED)
 # ----------------------------------
 
 class VehicleSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source='client.full_name', read_only=True)
+    
+    # 🛑 FIX: Make client field optional and read-only for nested routes
+    client = serializers.PrimaryKeyRelatedField(
+        queryset=Client.objects.all(),
+        required=False,  # Not required in request data for nested routes
+        write_only=True  # Hide from response to avoid confusion
+    )
 
     class Meta:
         model = Vehicle
         fields = [
             'id', 'client', 'client_name', 'vin', 'license_plate', 
-            'make', 'model', 'year', 'odometer', 'last_service_date'
+            'vehicle_type', 'year', 'make', 'model', 'trim', 'transmission',
+            'drivetrain', 'engine', 'odo_reading', 'odo_unit', 'color',
+            'unit_number', 'notes', 'last_service_date'
         ]
         read_only_fields = ['id', 'client_name']
+
+    def validate(self, data):
+        """
+        Custom validation for vehicle data - ALLOWS DUPLICATE VINs
+        """
+        vin = data.get('vin')
+        
+        # Only clean the VIN if provided, but DON'T check for duplicates
+        if vin and vin.strip():
+            # Clean the VIN by stripping whitespace
+            clean_vin = vin.strip()
+            
+            # 🛑 CRITICAL FIX: REMOVED VIN uniqueness check
+            # Vehicles can now have duplicate VINs
+            # This allows saving vehicles even if VIN already exists
+            
+            # Update the data with cleaned VIN
+            data['vin'] = clean_vin
+        else:
+            # If VIN is empty or just whitespace, set it to None
+            data['vin'] = None
+
+        return data
+
+    def create(self, validated_data):
+        """
+        Handle vehicle creation for both nested and direct routes
+        """
+        request = self.context.get('request')
+        
+        # 🛑 FIX: For nested routes, client comes from URL
+        if request and hasattr(request, 'kwargs') and 'client_pk' in request.kwargs:
+            client_pk = request.kwargs['client_pk']
+            try:
+                client = Client.objects.get(pk=client_pk)
+                validated_data['client'] = client
+            except Client.DoesNotExist:
+                raise serializers.ValidationError({'client': 'Client not found.'})
+        # 🛑 FIX: For direct routes, ensure client is provided in request data
+        elif 'client' not in validated_data:
+            raise serializers.ValidationError({
+                'client': 'Client is required. Provide client ID in request data for direct routes.'
+            })
+
+        return super().create(validated_data)
 
 
 # ----------------------------------

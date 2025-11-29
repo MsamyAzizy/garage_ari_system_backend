@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated 
 from rest_framework.pagination import PageNumberPagination
-from rest_framework import viewsets, mixins, filters, status 
+from rest_framework import viewsets, mixins, filters, status, serializers  # 🛑 ADDED serializers here
 from rest_framework.decorators import action 
 from rest_framework.parsers import MultiPartParser, FormParser 
 
@@ -249,44 +249,43 @@ class ClientViewSet(viewsets.ModelViewSet):
 
 
 # ----------------------------------
-# 2. Vehicle ViewSet (FIXED for Nested Routing)
+# 2. Vehicle ViewSet (UPDATED with Client ID Validation Fix)
 # ----------------------------------
-class VehicleViewSet(
-    mixins.CreateModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.UpdateModelMixin,
-    mixins.DestroyModelMixin,
-    mixins.ListModelMixin,
-    viewsets.GenericViewSet
-):
+class VehicleViewSet(viewsets.ModelViewSet):
     """
-    Provides creation, detail viewing, updating, deletion, and listing of Vehicles.
+    Provides full CRUD operations for Vehicles.
     
-    🛑 FIXED: get_queryset now filters vehicles by the client_pk from the URL.
+    🛑 UPDATED: Now only supports nested routes (/api/clients/{client_pk}/vehicles/)
     """
     queryset = Vehicle.objects.all()
     serializer_class = VehicleSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['vin', 'license_plate', 'make', 'model', 'year', 'color']
     
     def get_queryset(self):
-        # 🏆 CRITICAL FIX: Filter vehicles by the 'client_pk' passed in the nested URL
-        # The nested router defines this lookup parameter.
+        # 🏆 UPDATED: Only handle nested routes
         client_pk = self.kwargs.get('client_pk')
-        
-        if client_pk:
-            # Return vehicles associated with this specific client
-            return self.queryset.filter(client_id=client_pk)
-            
-        # If accessing the view set without nesting (which shouldn't happen with the current URL structure)
-        return self.queryset.none()
+        if not client_pk:
+            # Return empty queryset if no client_pk (should not happen with proper URL config)
+            return Vehicle.objects.none()
+        return self.queryset.filter(client_id=client_pk)
         
     def perform_create(self, serializer):
-        # Ensure the vehicle is linked to the client from the URL on creation
+        # 🏆 UPDATED: Only handle nested routes - client comes from URL
         client_pk = self.kwargs.get('client_pk')
         
+        # 🛑 FIX: Check if client_pk is valid (not 'undefined' and is a number)
+        if not client_pk or client_pk == 'undefined':
+            raise serializers.ValidationError({"client": "Client ID is required in the URL."})
+        
+        # 🛑 FIX: Ensure client_pk is a valid number
         try:
-            client = Client.objects.get(pk=client_pk)
+            client_pk_int = int(client_pk)
+        except (ValueError, TypeError):
+            raise serializers.ValidationError({"client": "Invalid Client ID format."})
+                
+        try:
+            client = Client.objects.get(pk=client_pk_int)
+            serializer.save(client=client)
         except Client.DoesNotExist:
-            # If the client doesn't exist, raise an error (should be handled by URL/Router logic too)
             raise serializers.ValidationError({"client": "Client not found."})
-
-        serializer.save(client=client)

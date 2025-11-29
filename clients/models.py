@@ -221,6 +221,22 @@ class Vehicle(models.Model):
     Represents a specific vehicle owned by a Client.
     Linked to the Client via a ForeignKey relationship.
     """
+    
+    # ODOMETER UNIT CHOICES
+    ODO_UNIT_CHOICES = [
+        ('miles', 'Miles'),
+        ('kilometers', 'Kilometers'),
+        ('hours', 'Hours'),
+    ]
+    
+    # DRIVETRAIN CHOICES
+    DRIVETRAIN_CHOICES = [
+        ('FWD', 'Front-Wheel Drive (FWD)'),
+        ('RWD', 'Rear-Wheel Drive (RWD)'),
+        ('AWD', 'All-Wheel Drive (AWD)'),
+        ('4x4/4WD', '4x4 / Four-Wheel Drive (4WD)'),
+    ]
+
     client = models.ForeignKey(
         Client, 
         on_delete=models.CASCADE, 
@@ -228,16 +244,107 @@ class Vehicle(models.Model):
         verbose_name="Owner"
     )
     
-    vin = models.CharField(max_length=17, unique=True, help_text="Vehicle Identification Number (17 chars)")
-    license_plate = models.CharField(max_length=20, blank=True, unique=True, null=True)
+    # 🛑 UPDATED: Made VIN and license_plate non-unique to allow duplicates
+    vin = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True, 
+        help_text="Vehicle Identification Number"
+    )
     
-    make = models.CharField(max_length=100)
-    model = models.CharField(max_length=100)
-    year = models.IntegerField()
+    license_plate = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True,
+        verbose_name="License Plate"
+    )
     
-    odometer = models.IntegerField(default=0, help_text="Current mileage/kilometers")
+    # 🛑 ADDED: New fields required by frontend
+    vehicle_type = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        verbose_name="Vehicle Type",
+        help_text="e.g., Sedan, SUV, Truck, etc."
+    )
+    
+    make = models.CharField(max_length=100, blank=True, null=True)
+    model = models.CharField(max_length=100, blank=True, null=True)
+    year = models.IntegerField(blank=True, null=True)
+    
+    # 🛑 ADDED: New specification fields
+    trim = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        verbose_name="Trim Level",
+        help_text="e.g., Base, Sport, Luxury, etc."
+    )
+    
+    transmission = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        verbose_name="Transmission Type",
+        help_text="e.g., Automatic, Manual, CVT, etc."
+    )
+    
+    drivetrain = models.CharField(
+        max_length=20, 
+        choices=DRIVETRAIN_CHOICES,
+        blank=True, 
+        null=True,
+        verbose_name="Drivetrain"
+    )
+    
+    engine = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        verbose_name="Engine Type",
+        help_text="e.g., 2.0L Turbo, V6, Electric, etc."
+    )
+    
+    # 🛑 ADDED: Odometer fields (renamed from 'odometer')
+    odo_reading = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        verbose_name="Odometer Reading",
+        help_text="Current mileage/kilometers/hours"
+    )
+    
+    odo_unit = models.CharField(
+        max_length=20, 
+        choices=ODO_UNIT_CHOICES,
+        default='miles',
+        verbose_name="Odometer Unit"
+    )
+    
+    color = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True,
+        verbose_name="Exterior Color"
+    )
+    
+    unit_number = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True,
+        verbose_name="Internal Unit Number",
+        help_text="Internal identification number for the vehicle"
+    )
+    
+    notes = models.TextField(
+        blank=True, 
+        null=True,
+        verbose_name="Vehicle Notes",
+        help_text="Any important notes about the vehicle"
+    )
+    
+    # 🛑 KEPT: Existing fields
     last_service_date = models.DateField(null=True, blank=True)
-    
     date_created = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -246,4 +353,4 @@ class Vehicle(models.Model):
         verbose_name_plural = "Vehicles"
         
     def __str__(self):
-        return f"{self.year} {self.make} {self.model} ({self.license_plate or 'No Plate'})"
+        return f"{self.year or 'N/A'} {self.make or 'Unknown'} {self.model or 'Vehicle'} ({self.license_plate or 'No Plate'})"
